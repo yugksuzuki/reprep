@@ -1,9 +1,10 @@
 import fs from 'fs';
 import path from 'path';
 
-// Carrega JSON uma vez
-const filePath = path.join(process.cwd(), 'data', 'representantes_formatado_com_whatsapp.json');
+const filePath = path.join(process.cwd(), 'api', 'representantes_formatado_com_whatsapp.json');
 const dados = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+
+// (resto do código permanece igual)
 
 // Função para normalizar
 function normalizar(texto) {
