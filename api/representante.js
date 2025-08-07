@@ -1,4 +1,5 @@
 const dados = [
+  [
   {
     "estado": "RS",
     "cidade": "Alegrete",
@@ -14695,7 +14696,10 @@ const dados = [
     "celular": "5551984267248",
     "whatsapp": "https://wa.me/5551984267248"
   }
+]
+  // ...cole seu JSON embutido aqui
 ];
+
 function normalizar(texto) {
   if (!texto || typeof texto !== 'string') return '';
   return texto
@@ -14705,7 +14709,40 @@ function normalizar(texto) {
     .trim();
 }
 
-// Exporta função para Vercel (Node.js)
+async function consultarViaCep(cep) {
+  const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+  const data = await res.json();
+  if (data?.erro || !data?.localidade || !data?.uf) return null;
+  return { cidade: data.localidade, estado: data.uf };
+}
+
+async function tentarVariacoesDeCep(cepOriginal) {
+  const baseCep = cepOriginal.replace(/\D/g, '').padEnd(8, '0');
+
+  console.log(`[Fallback] Tentando variações para o CEP original: ${cepOriginal}`);
+
+  // === Fase 1: 85955000 → 85955001 até 85955020
+  const prefixo = baseCep.slice(0, 5); // ex: 85955
+  for (let i = 1; i <= 20; i++) {
+    const novoCep = `${prefixo}${String(i).padStart(3, '0')}`;
+    console.log(`[Fase 1] Tentando ${novoCep}`);
+    const info = await consultarViaCep(novoCep);
+    if (info) return info;
+  }
+
+  // === Fase 2: 85955000 → 85910000, 85920000, ..., 85990000
+  const basePrefix = baseCep.slice(0, 3);     // ex: 859
+  const sufixo = baseCep.slice(5);            // ex: 000
+  for (let d = 1; d <= 9; d++) {
+    const novoCep = `${basePrefix}${d}0000`;  // ex: 85910000
+    console.log(`[Fase 2] Tentando ${novoCep}`);
+    const info = await consultarViaCep(novoCep);
+    if (info) return info;
+  }
+
+  return null;
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.status(405).json({ erro: 'Método não permitido. Use POST.' });
@@ -14720,21 +14757,22 @@ export default async function handler(req, res) {
 
   // Buscar cidade via ViaCEP
   if (cep && !cidade) {
-    try {
-      console.log(`[CEP] Consultando ViaCEP: ${cep}`);
-      const viaCepResp = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
-      const data = await viaCepResp.json();
-      if (data?.erro || !data?.localidade || !data?.uf) {
-        res.status(400).json({ erro: 'CEP inválido ou não encontrado.' });
+    const info = await consultarViaCep(cep);
+    if (info) {
+      cidade = info.cidade;
+      estado = info.estado;
+      console.log(`[ViaCEP] Cidade: ${cidade}, Estado: ${estado}`);
+    } else {
+      // 🔁 Tentar variações de CEP
+      const tentativa = await tentarVariacoesDeCep(cep);
+      if (tentativa) {
+        cidade = tentativa.cidade;
+        estado = tentativa.estado;
+        console.log(`[ViaCEP - Fallback] Cidade encontrada: ${cidade}, Estado: ${estado}`);
+      } else {
+        res.status(400).json({ erro: 'CEP inválido ou não encontrado após tentativas.' });
         return;
       }
-      cidade = data.localidade;
-      estado = data.uf;
-      console.log(`[ViaCEP] Cidade: ${cidade}, Estado: ${estado}`);
-    } catch (err) {
-      console.error("[ViaCEP] Erro:", err);
-      res.status(500).json({ erro: 'Erro ao consultar ViaCEP.' });
-      return;
     }
   }
 
@@ -14755,7 +14793,9 @@ export default async function handler(req, res) {
 
   if (!resultado) {
     console.warn(`[Busca] Representante não encontrado: ${cidade_normalizada}, ${estado_normalizado || 'qualquer'}`);
-    res.status(404).json({ erro: 'Representante não encontrado para essa cidade.' });
+    res.status(404).json({
+      erro: 'Representante não encontrado para essa cidade. Nossa equipe será notificada.'
+    });
     return;
   }
 
