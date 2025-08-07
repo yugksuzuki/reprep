@@ -3,7 +3,7 @@ import path from 'path';
 import { NextResponse } from 'next/server';
 
 // === Carrega os dados do JSON ===
-const filePath = path.join(process.cwd(), 'data', 'representantes_formatado_com_whatsapp.json');
+const filePath = path.join(process.cwd(), 'data', 'rep_m.json');
 const dados = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
 
 // === Função para normalizar strings ===
